@@ -141,11 +141,10 @@ extension ViewController {
         case .success(let response):
           self.errorFetchingCurrentPage = false
           self.updateDatasource(response: response, refresh: refresh)
-        case .failure(let error):
+        case .failure:
           self.errorFetchingCurrentPage = true
           self.loadingCell.state = .reload
         }
-
       }
     }
   }
