@@ -60,7 +60,7 @@ final class ContentLoader {
       let realEnd = min(end, numberOfItems)
       let items = Array(self.allItems[start..<realEnd])
       let response = PaginatedResponse(items: items, totalItems: numberOfItems, currentPage: page, numberOfPages: Int(totalPages))
-      if Bool.random() || page == 1 {
+      if Bool.random() || page == 1  {
         completion(.success(response))
       } else {
         completion(.failure(.error))
