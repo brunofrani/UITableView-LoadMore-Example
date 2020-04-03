@@ -140,7 +140,7 @@ extension ViewController {
         switch result {
         case .success(let response):
           self.errorFetchingCurrentPage = false
-          self.updateDatasource(response: response, refresh: refresh)
+          self.content = Self.newDatasource(previousDatasource: self.content, newItems: response.items, refresh: refresh)
           self.shouldShowLoadingCell = response.currentPage < response.numberOfPages
           self.tableView.refreshControl?.endRefreshing()
           self.tableView.reloadData()
@@ -152,19 +152,20 @@ extension ViewController {
     }
   }
 
-  func updateDatasource(response: PaginatedResponse, refresh: Bool) {
+  /// Creates a new datasource from the previous one adding all the new items in the correct section.
+  private static func newDatasource(previousDatasource: [TableSection], newItems: [Item], refresh: Bool) -> [TableSection] {
     if refresh {
-      let itemsByGroup = Dictionary(grouping: response.items) { GroupingByDay.makeNew(for: $0) }
+      let itemsByGroup = Dictionary(grouping: newItems) { GroupingByDay.makeNew(for: $0) }
       var sections = [TableSection]()
       for (group, items) in itemsByGroup {
         let newSection = TableSection(grouping: group, items: items)
         sections.append(newSection)
       }
-      self.content = sections.sorted { $0.grouping < $1.grouping }
+      return sections.sorted { $0.grouping < $1.grouping }
     } else {
-      if self.content.count > 0 {
-        var copy = self.content // TODO: is a copy needed here?
-        for item in response.items {
+      if previousDatasource.count > 0 {
+        var copy = previousDatasource
+        for item in newItems {
           let group = GroupingByDay.makeNew(for: item)
           if let sectionIndex = copy.firstIndex(where: { $0.grouping == group }) {
             var section = copy[sectionIndex]
@@ -177,15 +178,15 @@ extension ViewController {
             copy.append(newSection)
           }
         }
-        self.content = copy.sorted { $0.grouping < $1.grouping }
+        return copy.sorted { $0.grouping < $1.grouping }
       } else {
-        let itemsByGroup = Dictionary(grouping: response.items) { GroupingByDay.makeNew(for: $0) }
+        let itemsByGroup = Dictionary(grouping: newItems) { GroupingByDay.makeNew(for: $0) }
         var sections = [TableSection]()
         for (group, items) in itemsByGroup {
           let newSection = TableSection(grouping: group, items: items)
           sections.append(newSection)
         }
-        self.content = sections.sorted { $0.grouping < $1.grouping }
+        return sections.sorted { $0.grouping < $1.grouping }
       }
     }
   }
