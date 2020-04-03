@@ -23,9 +23,10 @@ class ViewController: UIViewController {
     return tableView
   }()
   
-  private lazy var loadingCell: LoadingTableViewCell = {
-    let cell = LoadingTableViewCell(style: .default, reuseIdentifier: LoadingTableViewCell.cellID)
-    cell.onReload = { [weak self] in
+  private lazy var loadingCell: ContainerTableViewCell<ReloadIndicatorView> = {
+    let cell = ContainerTableViewCell<ReloadIndicatorView>(style: .default, reuseIdentifier: ContainerTableViewCell<ReloadIndicatorView>.cellID)
+    cell.selectionStyle = .none
+    cell.view.onReload = { [weak self] in
       self?.loadContent()
     }
     return cell
@@ -45,7 +46,7 @@ class ViewController: UIViewController {
     )
 
     tableView.register(ItemTableViewCell.self, forCellReuseIdentifier: ItemTableViewCell.cellID)
-    tableView.register(LoadingTableViewCell.self, forCellReuseIdentifier: LoadingTableViewCell.cellID)
+    tableView.register(ContainerTableViewCell<ReloadIndicatorView>.self, forCellReuseIdentifier: ContainerTableViewCell<ReloadIndicatorView>.cellID)
     tableView.refreshControl = UIRefreshControl()
     tableView.refreshControl?.addTarget(self, action: #selector(refreshContent), for: .valueChanged)
     
@@ -153,7 +154,8 @@ extension ViewController {
       case .failure:
         DispatchQueue.main.async {
           self.errorFetchingCurrentPage = true
-          self.loadingCell.state = .reload
+          self.loadingCell.view.state = .reload
+          self.tableView.refreshControl?.endRefreshing()
         }
       }
 

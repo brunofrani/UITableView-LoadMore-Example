@@ -8,9 +8,7 @@
 
 import UIKit
 
-class LoadingTableViewCell: UITableViewCell {
-  static let cellID = "LoadingTableViewCell"
-
+class ReloadIndicatorView: UIView {
   enum State {
     case loading
     case reload
@@ -40,11 +38,11 @@ class LoadingTableViewCell: UITableViewCell {
     button.titleLabel?.font = .preferredFont(forTextStyle: .title2)
     //let image = UIImage(systemName: "arrow.counterclockwise.icloud.fill")
     //button.setImage(image, for: .normal)
-    button.addTarget(self, action:  #selector(LoadingTableViewCell.reloadTapped), for: .touchUpInside)
+    button.addTarget(self, action:  #selector(ReloadIndicatorView.reloadTapped), for: .touchUpInside)
     return button
   }()
 
- private lazy var reloadStack: UIStackView = {
+  private lazy var reloadStack: UIStackView = {
     let stack = UIStackView(arrangedSubviews: [reloadButton, errorLabel])
     stack.translatesAutoresizingMaskIntoConstraints = false
     stack.axis = .vertical
@@ -61,9 +59,9 @@ class LoadingTableViewCell: UITableViewCell {
     return label
   }()
 
-  override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
-    super.init(style: style, reuseIdentifier: reuseIdentifier)
-    setupSubviews()
+  override init(frame: CGRect) {
+    super.init(frame: frame)
+    setup()
   }
 
   required init?(coder aDecoder: NSCoder) {
@@ -76,19 +74,23 @@ class LoadingTableViewCell: UITableViewCell {
     self.onReload?()
   }
 
-  private func setupSubviews() {
-    selectionStyle = .none
+  private func setup() {
     state = .loading // trigger the didSet
-    contentView.addSubview(activityIndicator)
-    contentView.addSubview(reloadStack)
+    self.addSubview(activityIndicator)
+    self.addSubview(reloadStack)
 
     NSLayoutConstraint.activate([
-      activityIndicator.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-      activityIndicator.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
-      reloadStack.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-      reloadStack.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+      activityIndicator.centerXAnchor.constraint(equalTo: self.centerXAnchor),
+      activityIndicator.centerYAnchor.constraint(equalTo: self.centerYAnchor),
+      reloadStack.centerXAnchor.constraint(equalTo: self.centerXAnchor),
+      reloadStack.centerYAnchor.constraint(equalTo: self.centerYAnchor),
     ])
 
     activityIndicator.startAnimating()
   }
 }
+
+extension ContainerTableViewCell where V: ReloadIndicatorView {
+  static var cellID: String { return "ContainerTableViewCell<ReloadIndicatorView>" }
+}
+
