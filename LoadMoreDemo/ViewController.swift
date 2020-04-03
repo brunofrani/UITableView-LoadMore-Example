@@ -15,13 +15,76 @@ class ViewController: UIViewController {
   private var currentPage = 1
   private var errorFetchingCurrentPage: Bool = false
 
-  private(set) lazy var tableView: UITableView = {
+  fileprivate(set) lazy var tableView: UITableView = {
     let tableView = UITableView()
     tableView.translatesAutoresizingMaskIntoConstraints = false
     tableView.delegate = self
     tableView.dataSource = self
     return tableView
   }()
+
+  enum State {
+    case idle
+    case firstLoad
+    case loading
+    case error
+    case empty
+    case list
+  }
+
+  lazy var reloadIndicatorView: ReloadIndicatorView = {
+    let reloadIndicatorView = ReloadIndicatorView()
+    reloadIndicatorView.translatesAutoresizingMaskIntoConstraints = false
+    reloadIndicatorView.onReload = { [weak self] in
+      self?.state = .loading
+      self?.loadContent()
+    }
+    self.view.addSubview(reloadIndicatorView)
+    NSLayoutConstraint.activate([
+      reloadIndicatorView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+      reloadIndicatorView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+      reloadIndicatorView.topAnchor.constraint(equalTo: view.topAnchor),
+      reloadIndicatorView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+    ])
+    return reloadIndicatorView
+  }()
+
+  var state = State.idle {
+    didSet {
+      guard oldValue != state else { return }
+
+      switch state {
+      case .idle:
+        break
+      case .firstLoad:
+        self.reloadIndicatorView.state = .loading
+        self.tableView.isHidden = true
+        self.reloadIndicatorView.isHidden = false
+      case .error:
+        self.reloadIndicatorView.state = .reload
+        self.tableView.isHidden = true
+        self.reloadIndicatorView.isHidden = false
+      case .loading:
+        self.tableView.isHidden = true
+        self.reloadIndicatorView.isHidden = false
+      case .empty, .list:
+        self.tableView.isHidden = false
+        self.reloadIndicatorView.isHidden = true
+      }
+    }
+  }
+
+  func setupState() {
+    if errorFetchingCurrentPage && self.content.count == 0 {
+      state = .error
+    } else if errorFetchingCurrentPage && self.content.count > 0 {
+      state = .list // we show the previous datasource...
+    } else if self.content.count <= 0 {
+      state = .empty
+    } else {
+      state = .list
+    }
+  }
   
   private lazy var loadingCell: ContainerTableViewCell<ReloadIndicatorView> = {
     let cell = ContainerTableViewCell<ReloadIndicatorView>(style: .default, reuseIdentifier: ContainerTableViewCell<ReloadIndicatorView>.cellID)
@@ -49,8 +112,8 @@ class ViewController: UIViewController {
     tableView.register(ContainerTableViewCell<ReloadIndicatorView>.self, forCellReuseIdentifier: ContainerTableViewCell<ReloadIndicatorView>.cellID)
     tableView.refreshControl = UIRefreshControl()
     tableView.refreshControl?.addTarget(self, action: #selector(refreshContent), for: .valueChanged)
-    
-    tableView.refreshControl?.beginRefreshing()
+    //tableView.refreshControl?.beginRefreshing()
+    state = .firstLoad
     loadContent()
   }
 }
@@ -150,15 +213,16 @@ extension ViewController {
           self.shouldShowLoadingCell = response.currentPage < response.numberOfPages
           self.tableView.refreshControl?.endRefreshing()
           self.tableView.reloadData()
+          self.setupState()
         }
       case .failure:
         DispatchQueue.main.async {
           self.errorFetchingCurrentPage = true
           self.loadingCell.view.state = .reload
           self.tableView.refreshControl?.endRefreshing()
+          self.setupState()
         }
       }
-
     }
   }
 
