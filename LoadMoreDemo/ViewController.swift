@@ -101,7 +101,7 @@ class ViewController: UIViewController {
     self.view.addSubview(tableView)
     
     NSLayoutConstraint.activate([
-      tableView.topAnchor.constraint(equalTo: self.view.safeAreaLayoutGuide.topAnchor),
+      tableView.topAnchor.constraint(equalTo: view.topAnchor), // Fix unexpected scrolling issues when a refresControll is added to the tableView
       tableView.trailingAnchor.constraint(equalTo: self.view.safeAreaLayoutGuide.trailingAnchor),
       tableView.leadingAnchor.constraint(equalTo: self.view.safeAreaLayoutGuide.leadingAnchor),
       tableView.bottomAnchor.constraint(equalTo: self.view.safeAreaLayoutGuide.bottomAnchor)
@@ -112,7 +112,7 @@ class ViewController: UIViewController {
     tableView.register(ContainerTableViewCell<ReloadIndicatorView>.self, forCellReuseIdentifier: ContainerTableViewCell<ReloadIndicatorView>.cellID)
     tableView.refreshControl = UIRefreshControl()
     tableView.refreshControl?.addTarget(self, action: #selector(refreshContent), for: .valueChanged)
-    //tableView.refreshControl?.beginRefreshing()
+
     state = .firstLoad
     loadContent()
   }
@@ -211,8 +211,8 @@ extension ViewController {
           self.errorFetchingCurrentPage = false
           self.content = newContent
           self.shouldShowLoadingCell = response.currentPage < response.numberOfPages
-          self.tableView.refreshControl?.endRefreshing()
           self.tableView.reloadData()
+          self.tableView.refreshControl?.endRefreshing()
           self.setupState()
         }
       case .failure:
