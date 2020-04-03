@@ -10,11 +10,10 @@ import UIKit
 
 class ViewController: UIViewController {
   private let contentLoader = ContentLoader()
-
   private var content = [TableSection]()
   private var shouldShowLoadingCell: Bool = false
   private var currentPage = 1
-    private var error: Bool = false
+  private var errorFetchingCurrentPage: Bool = false
 
   private(set) lazy var tableView: UITableView = {
     let tableView = UITableView()
@@ -92,16 +91,16 @@ extension ViewController: UITableViewDataSource {
 extension ViewController: UITableViewDelegate {
   func tableView(_ tableView: UITableView, willDisplay cell: UITableViewCell, forRowAt indexPath: IndexPath) {
     guard isLoadingIndexPath(indexPath) else { return }
-    if !self.error {
+    if !self.errorFetchingCurrentPage {
       fetchNextPage()
     }
   }
 
   func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
     if isLoadingIndexPath(indexPath) {
-       return 150
-     }
-     return 60
+      return 150
+    }
+    return 60
   }
 }
 
@@ -140,10 +139,10 @@ extension ViewController {
       DispatchQueue.main.async {
         switch result {
         case .success(let response):
-          self.error = false
-           self.updateDatasource(response: response, refresh: refresh)
+          self.errorFetchingCurrentPage = false
+          self.updateDatasource(response: response, refresh: refresh)
         case .failure(let error):
-          self.error = true
+          self.errorFetchingCurrentPage = true
           self.loadingCell.state = .reload
         }
 
