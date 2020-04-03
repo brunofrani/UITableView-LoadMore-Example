@@ -129,26 +129,34 @@ extension ViewController {
     loadContent(refresh: true)
   }
 
-
+  private func fetchNextPage() {
+    currentPage += 1
+    loadContent()
+  }
 
   private func loadContent(refresh: Bool = false) {
     print("Fetching page \(currentPage)")
     contentLoader.fetchContent(page: currentPage) { [weak self] result in
       guard let self = self else { return }
 
-      DispatchQueue.main.async {
-        switch result {
-        case .success(let response):
+      switch result {
+      case .success(let response):
+        // the new data source can be calculated off the main thread
+        let newContent = Self.newDatasource(previousDatasource: self.content, newItems: response.items, refresh: refresh)
+        DispatchQueue.main.async {
           self.errorFetchingCurrentPage = false
-          self.content = Self.newDatasource(previousDatasource: self.content, newItems: response.items, refresh: refresh)
+          self.content = newContent
           self.shouldShowLoadingCell = response.currentPage < response.numberOfPages
           self.tableView.refreshControl?.endRefreshing()
           self.tableView.reloadData()
-        case .failure:
+        }
+      case .failure:
+        DispatchQueue.main.async {
           self.errorFetchingCurrentPage = true
           self.loadingCell.state = .reload
         }
       }
+
     }
   }
 
@@ -189,11 +197,6 @@ extension ViewController {
         return sections.sorted { $0.grouping < $1.grouping }
       }
     }
-  }
-
-  func fetchNextPage() {
-    currentPage += 1
-    loadContent()
   }
 }
 
