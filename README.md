@@ -1,2 +1,2 @@
 # UITableView-LoadMore-Example
-Example of a UITableView with sections that support the load more concept.
+Example of a UITableView with sections supporting the load more rows concept.
