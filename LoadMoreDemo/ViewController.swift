@@ -141,6 +141,9 @@ extension ViewController {
         case .success(let response):
           self.errorFetchingCurrentPage = false
           self.updateDatasource(response: response, refresh: refresh)
+          self.shouldShowLoadingCell = response.currentPage < response.numberOfPages
+          self.tableView.refreshControl?.endRefreshing()
+          self.tableView.reloadData()
         case .failure:
           self.errorFetchingCurrentPage = true
           self.loadingCell.state = .reload
@@ -185,9 +188,6 @@ extension ViewController {
         self.content = sections.sorted { $0.grouping < $1.grouping }
       }
     }
-    self.shouldShowLoadingCell = response.currentPage < response.numberOfPages
-    self.tableView.refreshControl?.endRefreshing()
-    self.tableView.reloadData()
   }
 
   func fetchNextPage() {
