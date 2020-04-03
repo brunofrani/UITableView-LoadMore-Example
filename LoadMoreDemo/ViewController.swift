@@ -8,6 +8,19 @@
 
 import UIKit
 
+/*
+ Keypoints:
+ 1. Load More with sections
+ 2. Operations
+ 3. How to use the same UI in 2 different contexts: ReloadIndicatorView
+ 4. State to drive the main UI states
+
+ Not implemented:
+ 1. If the user stops scrolling the list (i.e. the loading cell did end displaying) we could cancel the current page request to be more conservative
+    In this case we will need to differentiate between a failed fetches and cancelled fetches (at the moment we don't care the error returned in the Result failure
+    in the loadContent() method.
+ */
+
 class ViewController: UIViewController {
   private let contentLoader = ContentLoader()
   private var content = [TableSection]()
@@ -115,6 +128,11 @@ class ViewController: UIViewController {
 
     state = .firstLoad
     loadContent()
+  }
+
+  override func viewWillDisappear(_ animated: Bool) {
+    super.viewWillDisappear(animated)
+    self.contentLoader.cancel()
   }
 }
 
