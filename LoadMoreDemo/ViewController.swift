@@ -8,25 +8,101 @@
 
 import UIKit
 
+/*
+ Keypoints:
+ 1. Load More with sections
+ 2. Operations
+ 3. How to use the same UI in 2 different contexts: ReloadIndicatorView
+ 4. State to drive the main UI states
+
+ Not implemented:
+ 1. If the user stops scrolling the list (i.e. the loading cell did end displaying) we could cancel the current page request to be more conservative
+    In this case we will need to differentiate between a failed fetches and cancelled fetches (at the moment we don't care the error returned in the Result failure
+    in the loadContent() method.
+ */
+
 class ViewController: UIViewController {
   private let contentLoader = ContentLoader()
-
   private var content = [TableSection]()
   private var shouldShowLoadingCell: Bool = false
   private var currentPage = 1
-    private var error: Bool = false
+  private var errorFetchingCurrentPage: Bool = false
 
-  private(set) lazy var tableView: UITableView = {
+  fileprivate(set) lazy var tableView: UITableView = {
     let tableView = UITableView()
     tableView.translatesAutoresizingMaskIntoConstraints = false
     tableView.delegate = self
     tableView.dataSource = self
     return tableView
   }()
+
+  enum State {
+    case idle
+    case firstLoad
+    case loading
+    case error
+    case empty
+    case list
+  }
+
+  lazy var reloadIndicatorView: ReloadIndicatorView = {
+    let reloadIndicatorView = ReloadIndicatorView()
+    reloadIndicatorView.translatesAutoresizingMaskIntoConstraints = false
+    reloadIndicatorView.onReload = { [weak self] in
+      self?.state = .loading
+      self?.loadContent()
+    }
+    self.view.addSubview(reloadIndicatorView)
+    NSLayoutConstraint.activate([
+      reloadIndicatorView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+      reloadIndicatorView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+      reloadIndicatorView.topAnchor.constraint(equalTo: view.topAnchor),
+      reloadIndicatorView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+    ])
+    return reloadIndicatorView
+  }()
+
+  var state = State.idle {
+    didSet {
+      guard oldValue != state else { return }
+
+      switch state {
+      case .idle:
+        break
+      case .firstLoad:
+        self.reloadIndicatorView.state = .loading
+        self.tableView.isHidden = true
+        self.reloadIndicatorView.isHidden = false
+      case .error:
+        self.reloadIndicatorView.state = .reload
+        self.tableView.isHidden = true
+        self.reloadIndicatorView.isHidden = false
+      case .loading:
+        self.tableView.isHidden = true
+        self.reloadIndicatorView.isHidden = false
+      case .empty, .list:
+        self.tableView.isHidden = false
+        self.reloadIndicatorView.isHidden = true
+      }
+    }
+  }
+
+  func setupState() {
+    if errorFetchingCurrentPage && self.content.count == 0 {
+      state = .error
+    } else if errorFetchingCurrentPage && self.content.count > 0 {
+      state = .list // we show the previous datasource...
+    } else if self.content.count <= 0 {
+      state = .empty
+    } else {
+      state = .list
+    }
+  }
   
-  private lazy var loadingCell: LoadingTableViewCell = {
-    let cell = LoadingTableViewCell(style: .default, reuseIdentifier: LoadingTableViewCell.cellID)
-    cell.onReload = { [weak self] in
+  private lazy var loadingCell: ContainerTableViewCell<ReloadIndicatorView> = {
+    let cell = ContainerTableViewCell<ReloadIndicatorView>(style: .default, reuseIdentifier: ContainerTableViewCell<ReloadIndicatorView>.cellID)
+    cell.selectionStyle = .none
+    cell.view.onReload = { [weak self] in
       self?.loadContent()
     }
     return cell
@@ -38,7 +114,7 @@ class ViewController: UIViewController {
     self.view.addSubview(tableView)
     
     NSLayoutConstraint.activate([
-      tableView.topAnchor.constraint(equalTo: self.view.safeAreaLayoutGuide.topAnchor),
+      tableView.topAnchor.constraint(equalTo: view.topAnchor), // Fix unexpected scrolling issues when a refresControll is added to the tableView
       tableView.trailingAnchor.constraint(equalTo: self.view.safeAreaLayoutGuide.trailingAnchor),
       tableView.leadingAnchor.constraint(equalTo: self.view.safeAreaLayoutGuide.leadingAnchor),
       tableView.bottomAnchor.constraint(equalTo: self.view.safeAreaLayoutGuide.bottomAnchor)
@@ -46,12 +122,17 @@ class ViewController: UIViewController {
     )
 
     tableView.register(ItemTableViewCell.self, forCellReuseIdentifier: ItemTableViewCell.cellID)
-    tableView.register(LoadingTableViewCell.self, forCellReuseIdentifier: LoadingTableViewCell.cellID)
+    tableView.register(ContainerTableViewCell<ReloadIndicatorView>.self, forCellReuseIdentifier: ContainerTableViewCell<ReloadIndicatorView>.cellID)
     tableView.refreshControl = UIRefreshControl()
     tableView.refreshControl?.addTarget(self, action: #selector(refreshContent), for: .valueChanged)
-    
-    tableView.refreshControl?.beginRefreshing()
+
+    state = .firstLoad
     loadContent()
+  }
+
+  override func viewWillDisappear(_ animated: Bool) {
+    super.viewWillDisappear(animated)
+    self.contentLoader.cancel()
   }
 }
 
@@ -92,16 +173,16 @@ extension ViewController: UITableViewDataSource {
 extension ViewController: UITableViewDelegate {
   func tableView(_ tableView: UITableView, willDisplay cell: UITableViewCell, forRowAt indexPath: IndexPath) {
     guard isLoadingIndexPath(indexPath) else { return }
-    if !self.error {
+    if !self.errorFetchingCurrentPage {
       fetchNextPage()
     }
   }
 
   func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
     if isLoadingIndexPath(indexPath) {
-       return 150
-     }
-     return 60
+      return 150
+    }
+    return 60
   }
 }
 
@@ -130,40 +211,53 @@ extension ViewController {
     loadContent(refresh: true)
   }
 
-
+  private func fetchNextPage() {
+    currentPage += 1
+    loadContent()
+  }
 
   private func loadContent(refresh: Bool = false) {
     print("Fetching page \(currentPage)")
     contentLoader.fetchContent(page: currentPage) { [weak self] result in
       guard let self = self else { return }
 
-      DispatchQueue.main.async {
-        switch result {
-        case .success(let response):
-          self.error = false
-           self.updateDatasource(response: response, refresh: refresh)
-        case .failure(let error):
-          self.error = true
-          self.loadingCell.state = .reload
+      switch result {
+      case .success(let response):
+        // the new data source can be calculated off the main thread
+        let newContent = Self.newDatasource(previousDatasource: self.content, newItems: response.items, refresh: refresh)
+        DispatchQueue.main.async {
+          self.errorFetchingCurrentPage = false
+          self.content = newContent
+          self.shouldShowLoadingCell = response.currentPage < response.numberOfPages
+          self.tableView.reloadData()
+          self.tableView.refreshControl?.endRefreshing()
+          self.setupState()
         }
-
+      case .failure:
+        DispatchQueue.main.async {
+          self.errorFetchingCurrentPage = true
+          self.loadingCell.view.state = .reload
+          self.tableView.refreshControl?.endRefreshing()
+          self.setupState()
+        }
       }
     }
   }
 
-  func updateDatasource(response: PaginatedResponse, refresh: Bool) {
+  /// Creates a new datasource from the previous one adding all the new items in the correct section.
+  private static func newDatasource(previousDatasource: [TableSection], newItems: [Item], refresh: Bool) -> [TableSection] {
     if refresh {
-      let itemsByGroup = Dictionary(grouping: response.items) { GroupingByDay.makeNew(for: $0) }
+      let itemsByGroup = Dictionary(grouping: newItems) { GroupingByDay.makeNew(for: $0) }
       var sections = [TableSection]()
       for (group, items) in itemsByGroup {
         let newSection = TableSection(grouping: group, items: items)
         sections.append(newSection)
       }
-      self.content = sections.sorted { $0.grouping < $1.grouping }
+      return sections.sorted { $0.grouping < $1.grouping }
     } else {
-      if self.content.count > 0 {
-        var copy = self.content // TODO: is a copy needed here?
-        for item in response.items {
+      if previousDatasource.count > 0 {
+        var copy = previousDatasource
+        for item in newItems {
           let group = GroupingByDay.makeNew(for: item)
           if let sectionIndex = copy.firstIndex(where: { $0.grouping == group }) {
             var section = copy[sectionIndex]
@@ -176,25 +270,17 @@ extension ViewController {
             copy.append(newSection)
           }
         }
-        self.content = copy.sorted { $0.grouping < $1.grouping }
+        return copy.sorted { $0.grouping < $1.grouping }
       } else {
-        let itemsByGroup = Dictionary(grouping: response.items) { GroupingByDay.makeNew(for: $0) }
+        let itemsByGroup = Dictionary(grouping: newItems) { GroupingByDay.makeNew(for: $0) }
         var sections = [TableSection]()
         for (group, items) in itemsByGroup {
           let newSection = TableSection(grouping: group, items: items)
           sections.append(newSection)
         }
-        self.content = sections.sorted { $0.grouping < $1.grouping }
+        return sections.sorted { $0.grouping < $1.grouping }
       }
     }
-    self.shouldShowLoadingCell = response.currentPage < response.numberOfPages
-    self.tableView.refreshControl?.endRefreshing()
-    self.tableView.reloadData()
-  }
-
-  func fetchNextPage() {
-    currentPage += 1
-    loadContent()
   }
 }
 
